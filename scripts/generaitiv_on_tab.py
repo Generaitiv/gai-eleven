@@ -232,7 +232,7 @@ def create_token(api_key_input, save_btn, collection_name, artwork_name, amount,
         buffered = BytesIO()
         image_input.save(buffered, format="PNG")
         img_str = base64.b64encode(buffered.getvalue())
-        img_str = bytes("data:image/jpeg;base64,", encoding='utf-8') + img_str
+        img_str = bytes("data:image/png;base64,", encoding='utf-8') + img_str
         img_str = img_str.decode("utf-8")
     else:
         img_str = ""
