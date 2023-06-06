@@ -1,10 +1,11 @@
 import modules.scripts as scripts
 import gradio as gr
 import os
-import io
+from io import BytesIO
 import requests
 import json
 from modules import script_callbacks
+import base64
 
 # global vars
 wallet_address = ""
@@ -42,14 +43,14 @@ def on_ui_tabs():
                     info="Give your artwork a cool name!",
                     lines=1,
                     value="",
-                )   
+                )
                 amount = gr.Textbox(
                     label="Number of tokens",
                     info="How many tokens do you want to create?",
                     lines=1,
                     value="",
                 )
-        
+
         with gr.Row():
             artwork_description = gr.Textbox(
                 label="Description",
@@ -73,6 +74,13 @@ def on_ui_tabs():
 
             # invisible components
             upload_url = gr.Textbox(
+                label="",
+                info="",
+                lines=1,
+                value="",
+                visible=False
+            )
+            img_str = gr.Textbox(
                 label="",
                 info="",
                 lines=1,
@@ -103,16 +111,16 @@ def on_ui_tabs():
 
         # taking javascript code from a file and passing it as onlick function
         current_dir = os.getcwd()
-        with open(os.path.join(current_dir, r'extensions\generaitiv-plugin\javascript\uploadImage.js')) as dataFile:
+        with open(os.path.join(current_dir, r'extensions/gai-eleven/javascript/uploadImage.js')) as dataFile:
             js_logic = dataFile.read()
-        
+
         submit_btn.click(
             create_token,
             inputs = [api_key_input, save_btn, collection_name, artwork_name, amount, artwork_description, image_input, submit_btn, traits_input],
-            outputs = [upload_url],
+            outputs = [upload_url, img_str],
         ).success(
             fn=None,
-            inputs = [upload_url, image_input],
+            inputs = [upload_url, img_str],
             outputs = [response],
             _js=js_logic,
         )
@@ -125,8 +133,8 @@ def get_collections(api_key_input):
     global wallet_address, collections_and_slugs
 
     wallet_address = requests.get(
-          "https://api.generaitiv.xyz/v1/consumer/user-info/",
-          headers={
+        "https://api.generaitiv.xyz/v1/consumer/user-info/",
+        headers={
             "Authorization": f"Bearer {api_key_input}",
             "Content-Type": "application/json"
         }
@@ -140,7 +148,7 @@ def get_collections(api_key_input):
             "Content-Type": "application/json"
         }
     )
-    
+
     for collection in user_collections.json()["collections"]:
         collections_and_slugs[collection["name"]] = collection["slugOrAddress"]
 
@@ -185,17 +193,17 @@ def create_token(api_key_input, save_btn, collection_name, artwork_name, amount,
     # Creating token object
     token_obj = {
         "tokenId": new_token_id,
-        "amount": amount,
+        "amount": "0x" + hex(int(amount))[2:].zfill(64),
         "attributes": attributes,
         "name": artwork_name,
         "description": artwork_description
     }
     print("Token Object: ")
-    print(json.dumps(token_obj, indent = 1))
+    print(json.dumps(token_obj, indent=1))
     print()
 
     slug = collections_and_slugs[collection_name]
-    
+
     # Creating token
     res = requests.post(
         f"https://api.generaitiv.xyz/v1/c/virtual/token/{slug}/{new_token_id}",
@@ -210,7 +218,7 @@ def create_token(api_key_input, save_btn, collection_name, artwork_name, amount,
 
     # Getting upload PUT url
     upload_puturl = requests.get(
-        f'https://api.generaitiv.xyz/v1/upload/token/{new_token_id}/{artwork_name}',
+        f'https://api.generaitiv.xyz/v1/upload/token/{new_token_id}/art.png',
         headers={
             "Authorization": f"Bearer {api_key_input}",
             "Content-Type": "application/json"
@@ -220,7 +228,15 @@ def create_token(api_key_input, save_btn, collection_name, artwork_name, amount,
 
     # print(type(image_input))
     # image_input.save('art.png', 'PNG')
+    if (image_input):
+        buffered = BytesIO()
+        image_input.save(buffered, format="PNG")
+        img_str = base64.b64encode(buffered.getvalue())
+        img_str = bytes("data:image/png;base64,", encoding='utf-8') + img_str
+        img_str = img_str.decode("utf-8")
+    else:
+        img_str = ""
 
-    return upload_put_url
+    return [upload_put_url, img_str]
 
 script_callbacks.on_ui_tabs(on_ui_tabs)
